@@ -20,14 +20,10 @@
 # and you tell it what to name that root in JetAudio, and it copies everything over for you,
 # carefully retaining the directory structure.
 #
+import glob
+from os.path import basename, dirname
 import requests
 from requests_toolbelt.multipart.encoder import MultipartEncoder
-import os.path
-import json
-from os import walk
-from os import listdir
-from os.path import isfile, join
-import glob
 import sys
 import urllib
 
@@ -98,9 +94,9 @@ def check_for_remote_directory_recursively(destination_place):
 #    This function auto-creates any remote directories needed to hold the file.
 #
 def upload_one_file(path, root):
-    path_dirname = os.path.dirname(path);
+    path_dirname = dirname(path);
     #print("path_dirname is %s" % (path_dirname,))
-    path_basename = os.path.basename(path);
+    path_basename = basename(path);
     #print("path_basename is %s" % (path_basename,))
     destination_place = "%s/%s" % (root, path_dirname)
     #print("destination_place is %s" % (destination_place,))
