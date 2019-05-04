@@ -1,4 +1,4 @@
-
+#!/usr/bin/env python3
 # JetAudio Music Syncer
 # Copyright 2019 The Mad Acro -- Licensed under GPLv2 only.
 #
