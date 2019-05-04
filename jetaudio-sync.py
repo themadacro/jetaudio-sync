@@ -56,7 +56,8 @@ def init_remote_routes(ipaddr):
 #  Only check_for_remote_directory() does that...
 #
 def create_remote_directory(destination_place):
-    #print("Creating directory %s" % (destination_place,))
+    if __debug__:
+        print("Creating directory %s" % (destination_place,))
     r = requests.post(create_endpoint, data={"path": destination_place})
     print("Successfully created directory %s (%d / %s)" % (destination_place,
                                                            r.status_code, r.content))
@@ -70,9 +71,11 @@ def create_remote_directory(destination_place):
 #   Only check_for_remote_directory_recursively() does that...
 #
 def check_for_remote_directory(destination_place):
-    #print("checking for existance of %s" % (destination_place,))
+    if __debug__:
+        print("checking for existance of %s" % (destination_place,))
     r = requests.get(list_endpoint + "?path=%s" % (urllib.parse.quote(destination_place),))
-    #print("check complete: %d / %s" % (r.status_code, r.content,))
+    if __debug__:
+        print("check complete: %d / %s" % (r.status_code, r.content,))
     if r.status_code == 404:
         create_remote_directory(destination_place)
 
@@ -103,9 +106,11 @@ def upload_one_file(path, root):
     path_dirname = dirname(path)
     #print("path_dirname is %s" % (path_dirname,))
     path_basename = basename(path)
-    #print("path_basename is %s" % (path_basename,))
+    if __debug__:
+        print("path_basename is %s" % (path_basename,))
     destination_place = "%s/%s" % (root, path_dirname)
-    #print("destination_place is %s" % (destination_place,))
+    if __debug__:
+        print("destination_place is %s" % (destination_place,))
 
     check_for_remote_directory_recursively(destination_place)
 
@@ -135,7 +140,8 @@ def remove_remote_empty_directory(path):
 
 
 def remove_remote_file(path):
-    #print("Here i would delete the remote file %s" % (path,))
+    if __debug__:
+        print("Here i would delete the remote file %s" % (path,))
     r = requests.post(delete_endpoint, data={"path": path})
     if r.status_code > 300:
         print("Failed to remove remote file %s: %d %s" % (path, r.status_code, r.content))
@@ -152,7 +158,8 @@ def remove_remote_file(path):
 #
 def get_files_in_directory(directory):
     url = list_endpoint + "?path=%s" % (urllib.parse.quote(directory),)
-    #print("get_files_in_directory: %s" % (url,))
+    if __debug__:
+        print("get_files_in_directory: %s" % (url,))
     r = requests.get(url)
 
     if r.status_code >= 300:
@@ -173,7 +180,8 @@ def get_files_in_directory(directory):
 #    to see which files need to be pushed.
 #
 def traverse_directory_tree(directory):
-    #print("traverse_directory_tree: %s" % (directory,))
+    if __debug__:
+        print("traverse_directory_tree: %s" % (directory,))
     results = []
 
     dirlist = get_files_in_directory(directory)
@@ -182,15 +190,19 @@ def traverse_directory_tree(directory):
         return []
 
     for file in dirlist:
-        #print("processing %s" % (file["path"],))
+        if __debug__:
+            print("processing %s" % (file["path"],))
         if file["path"].endswith("/"):
-            #print("%s is a directory -- we must go deeper" % (file["path"],))
+            if __debug__:
+                print("%s is a directory -- we must go deeper" % (file["path"],))
             subdirents = traverse_directory_tree(file["path"])
             for i in subdirents:
-                #print("Appending subdirent %s to my list" % (i["path"],))
+                if __debug__:
+                    print("Appending subdirent %s to my list" % (i["path"],))
                 results.append(i)
         else:
-            #print("I spy with my little eye, a file %s" % (file["path"],))
+            if __debug__:
+                print("I spy with my little eye, a file %s" % (file["path"],))
             results.append(file)
     return results
 
@@ -203,7 +215,8 @@ def traverse_directory_tree(directory):
 #    where "remote_filename" is the full path on the remote.
 #
 def summarize_remote(remote_root):
-    #print("summarize_remote - %s" % (remote_root,))
+    if __debug__:
+        print("summarize_remote - %s" % (remote_root,))
     all_files = {}
     files = traverse_directory_tree(remote_root)
     for file in files:
@@ -222,15 +235,18 @@ def find_empty_directories(directory):
 
     dirlist = get_files_in_directory(directory)
     if len(dirlist) == 0:
-        #print("%s is an empty directory" % (directory,))
+        if __debug__:
+            print("%s is an empty directory" % (directory,))
         results.append(directory)
     else:
         for file in dirlist:
-            #print("processing %s" % (file["path"],))
+            if __debug__:
+                print("processing %s" % (file["path"],))
             if file["path"].endswith("/"):
                 subdirents = find_empty_directories(file["path"])
                 for i in subdirents:
-                    #print("Appending subdirent %s to my list" % (i,))
+                    if __debug__:
+                        print("Appending subdirent %s to my list" % (i,))
                     results.append(i)
     return results
 
@@ -256,7 +272,8 @@ exts = ("aif", "avi", "m4a", "mp3", "ogg", "opus")
 
 
 def summarize_local(root):
-    #print("root is %s" % (root,))
+    if __debug__:
+        print("root is %s" % (root,))
     result = []
     for file in glob.iglob(root + "/**/*.*", recursive=True):
         for ext in exts:
@@ -272,7 +289,8 @@ def sync_local_to_remote(remote_root, remote_files, local_files):
         # XXX TODO - Check file sizes - TODO XXX
         #  remote_files[remote_file] is the file size.
         if remote_file in remote_files:
-            #print("OK  %s" % (remote_file,))
+            if __debug__:
+                print("OK  %s" % (remote_file,))
             remote_files[remote_file] = -1
         else:
             upload_one_file(local_file, remote_root)
