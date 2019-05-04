@@ -1,4 +1,4 @@
-#
+
 # JetAudio Music Syncer
 # Copyright 2019 The Mad Acro -- Licensed under GPLv2 only.
 #
@@ -31,15 +31,14 @@ import glob
 import sys
 import urllib
 
+##------------------------------------------
 api_server = ""
 create_endpoint = ""
 list_endpoint = ""
 upload_endpoint = ""
 delete_endpoint = ""
-remote_root = "/"
-local_root = "."
 
-def init_server(ipaddr):
+def init_remote_routes(ipaddr):
     global api_server
     global create_endpoint
     global list_endpoint
@@ -51,6 +50,7 @@ def init_server(ipaddr):
     upload_endpoint = "%s/upload" % (api_server,)
     delete_endpoint = "%s/delete" % (api_server,)
 
+##------------------------------------------
 #
 # create_remote_directory - create a specific directory. 
 #  INTERNAL FUNCTION -- 
@@ -60,7 +60,7 @@ def init_server(ipaddr):
 def create_remote_directory(destination_place):
     #print("Creating directory %s" % (destination_place,))
     r = requests.post(create_endpoint, data={"path": destination_place})
-    print("Create directory complete: %d / %s" % (r.status_code, r.content,))
+    print("Successfully created directory %s (%d / %s)" % (destination_place, r.status_code, r.content))
 
 #
 # check_for_remote_directory - ensure a directory exists prior to using it
@@ -115,10 +115,11 @@ def upload_one_file(path, root):
        print("Can't upload %s/%s - bummer" % (destination_place,path_basename))
        return
 
-    print("Uploading %s -> %s/%s" % (path, destination_place, path_basename))
     r = requests.post(upload_endpoint, data=m, headers={'Content-Type': m.content_type})
     if r.status_code >= 300:
-        print("Upload complete with error: %d / %s" % (r.status_code, r.content,))
+        print("FAILED upload %s -> %s/%s (%d / %s)" % (path, destination_place, path_basename, r.status_code, r.content,))
+    else:
+        print("Successfully uploaded %s -> %s/%s" % (path, destination_place, path_basename))
 
 def remove_remote_empty_directory(path):
    r = requests.post(delete_endpoint, data={"path": path})
@@ -135,6 +136,7 @@ def remove_remote_file(path):
    else:
         print("Removed remote file %s" % (path,))
 
+##---------------------------------------------
 #
 # get_files_in_directory - collect all files in a remote directory
 #    INTERNAL FUNCTION --
@@ -142,12 +144,17 @@ def remove_remote_file(path):
 #    Some of them may be files, some may be directories.
 #
 def get_files_in_directory(directory):
-    r = requests.get(list_endpoint + "?path=%s" % (urllib.parse.quote(directory),))
+    url = list_endpoint + "?path=%s" % (urllib.parse.quote(directory),)
+    #print("get_files_in_directory: %s" % (url,))
+    r = requests.get(url)
+
     if r.status_code >= 300:
-        print("dirlist complete: %d / %s" % (r.status_code, r.content,))
-        print("Response status code: %d" % (r.status_code,))
-        print("Response json %s" % (json.dumps(r.json()),))
-    return r.json()
+        print("ERROR: dirlist complete: %d / %s" % (r.status_code, r.content,))
+        print("ERROR: Response status code: %d" % (r.status_code,))
+        print("ERROR: Response json %s" % (r.text,))
+        return None
+    else:
+        return r.json()
 
 #
 # traverse_directory_tree - collect all files in a remote directory tree
@@ -158,9 +165,14 @@ def get_files_in_directory(directory):
 #    to see which files need to be pushed.
 #
 def traverse_directory_tree(directory):
+    #print("traverse_directory_tree: %s" % (directory,))
     results = []
 
     dirlist = get_files_in_directory(directory)
+    if dirlist is None:
+        print("WARN: traverse_directory_tree: get_files_in_directory returned None")
+        return []
+
     for file in dirlist:
         #print("processing %s" % (file["path"],))
         if file["path"].endswith("/"):
@@ -172,7 +184,6 @@ def traverse_directory_tree(directory):
         else:
             #print("I spy with my little eye, a file %s" % (file["path"],))
             results.append(file)
-
     return results
 
 #
@@ -182,23 +193,20 @@ def traverse_directory_tree(directory):
 #       retval[remote_filename] = remote_filesize
 #    where "remote_filename" is the full path on the remote.
 #
-def summarize_remote():
+def summarize_remote(remote_root):
+    #print("summarize_remote - %s" % (remote_root,))
     all_files = {}
-    files = traverse_directory_tree("/")
+    files = traverse_directory_tree(remote_root)
     for file in files:
         all_files[file["path"]] = file["size"]
     return all_files
 
-def summarize_remote_tree():
-    retval = {}
-    compound_root = "%s/%s" % (remote_root, local_root)
-
-    all_files = summarize_remote()
-    for file in all_files:
-        if file.startswith(compound_root):
-            retval[file] = all_files[file]
-    return retval
-
+#
+# find_empty_directories - collect all directories with neither files nor subdirs
+#    INTERNAL FUNCTION
+#    Returns all directories that could be safely deleted
+#    Because they are empty leafs (directories with neither files nor subdirs)
+#
 def find_empty_directories(directory):
     results = []
 
@@ -214,15 +222,9 @@ def find_empty_directories(directory):
                 for i in subdirents:
                     #print("Appending subdirent %s to my list" % (i,))
                     results.append(i)
-
     return results
 
-def summarize_empty_directories():
-    results = find_empty_directories("/")
-    #for dirname in results:
-    #    print("empty directory -> %s" % (dirname,))
-    return results
-
+##----------------------------------
 # File types we want to upload:
 #   aif
 #   avi
@@ -241,7 +243,7 @@ exts = ("aif", "avi", "m4a", "mp3", "ogg", "opus")
 #exts = ("aif", "avi", "flac", "m4a", "mp3", "ogg", "opus", "wav")
 
 def summarize_local(root):
-    print("root is %s" % (root,))
+    #print("root is %s" % (root,))
     result = []
     for file in glob.iglob(root + "/**/*.*", recursive=True):
         for ext in exts:
@@ -250,97 +252,167 @@ def summarize_local(root):
     return result
 
 
-def sync_local_to_remote(remote_files, local_files):
+##----------------------------------
+def sync_local_to_remote(remote_root, remote_files, local_files):
    for local_file in local_files:
       remote_file = "%s/%s" % (remote_root, local_file)
       # XXX TODO - Check file sizes - TODO XXX
       #  remote_files[remote_file] is the file size.
       if remote_file in remote_files:
-         print("OK  %s" % (remote_file,))
+         #print("OK  %s" % (remote_file,))
          remote_files[remote_file] = -1
       else:
          upload_one_file(local_file, remote_root)
 
 
 ##-------------------------------------------
-def operation_sync():
-   remote_files = summarize_remote_tree()
+def operation_sync(remote_root, local_root):
+   remote_compound_root = "%s/%s" % (remote_root, local_root)
+   remote_files = summarize_remote(remote_compound_root)
    local_files = summarize_local(local_root)
 
-   sync_local_to_remote(remote_files, local_files)
+   sync_local_to_remote(remote_root, remote_files, local_files)
 
    for remote_file in remote_files:
       if remote_files[remote_file] != -1:
           remove_remote_file(remote_file)
 
-def operation_merge():
-   remote_files = summarize_remote_tree()
+def operation_merge(remote_root, local_root):
+   remote_root = "%s/%s" % (remote_root, local_root)
+   remote_files = summarize_remote(remote_root)
    local_files = summarize_local(local_root)
 
    sync_local_to_remote(remote_files, local_files)
 
-def operation_remove():
-   remote_files = summarize_remote()
+def operation_remove(remote_root):
+   remote_files = summarize_remote(remote_root)
    for file in remote_files:
        if file.startswith(remote_root):
            remove_remote_file(file)
 
-def operation_prune():
-   empty_directories = summarize_empty_directories()
-   for empty_dir in empty_directories:
-       if empty_dir.startswith(remote_root):
-           remove_remote_empty_directory(empty_dir)
+def operation_prune(remote_root):
+   done_one = True
+   while done_one:
+       done_one = False
+       empty_directories = find_empty_directories(remote_root)
+       for empty_dir in empty_directories:
+           if empty_dir.startswith(remote_root):
+               remove_remote_empty_directory(empty_dir)
+               done_one = True
 
-def usage(progname):
-   print("Usage: %s operation ip-address target [source]" % (sys.argv[0]))
+def operation_list(remote_root):
+    remote_files = summarize_remote(remote_root)
+    for file in remote_files:
+       print("%10d %s" % (remote_files[file], file))
+
+##--------------------------------------------
+def usage():
+   print("Usage: %s operation ip-address [remote-dir [local-dir [...]]]" % (sys.argv[0]))
+   print("")
    print("Usage Examples:")
-   print("  %s sync 192.168.1.155 / mymedia/subdir")
-   print("  %s merge 192.168.1.155 / mymedia/subdir")
+   print("  %s sync 192.168.1.155 mymedia/subdir ...")
+   print("  %s merge 192.168.1.155 mymedia/subdir ...")
    print("  %s remove 192.168.1.155 /mymedia")
    print("  %s prune 192.168.1.155 /")
+   print("  %s list 192.168.1.155 /")
+   print("")
+   print(" *** IMPORTANT *** README *** ")
+   print("It is important for you to understand that I wrote this utility to manage")
+   print("entire directory trees at once.  So there are no operations that allow you")
+   print("to work at the file level.  Maybe someday someone will fork this project and")
+   print("build awesome file-level control over everything.  But that will not be me.")
+   print(" *** IMPORTANT *** README *** ")
    print("")
    print("Operations")
    print(" sync")
-   print("        Ensure the remote device is the same as local.")
-   print("        Files on remote that are not present locally will be removed.")
-   print("        sync won't remove directories (see prune for how to do that)")
+   print("        Syncs one or more directories on the remote with the local directories")
+   print("        Files that exist locally but not remotely will be copied over.")
+   print("        Files that exist remotely but not locally will be removed (from the remote)")
+   print("        Sync won't remove directories themselves -- use 'prune' for that.")
    print(" merge")
-   print("        Merges the local directory to the remote device")
-   print("        No files on the remote device will be removed")
+   print("        Merges one or more directories to the remote.")
+   print("        The directories will be copied to the place you give on the command line.")
+   print("        As in the example, stuff would be in /mymedia/subdir/* on the remote.")
+   print("        Merge never removes any files on the remote")
    print(" remove")
-   print("        Remove a directory and everything underneath it.")
-   print("        This is great if you want to start over.")
+   print("        Remove the files (but not directories) under a directory on the remote.")
+   print("        You can remove multiple directories at a time")
+   print("        To protect you, there is no default. you must provide a directory, even if it is /")
+   print("        Remove only works on files -- it won't remove empty directories.  Use 'prune' for that.")
    print(" prune")
-   print("        Find and delete any empty directories under root")
-   print("        This will not remove any files, only empty directories.")
+   print("        Find and delete any empty directories on the remote.")
+   print("        You can prune multiple directories at a time")
+   print("        You don't have to specify a directory. the default is /")
+   print("        Prune does not remove any files, only empty directories.")
+   print(" list")
+   print("        Show you what is on the remote")
+   print("        You can list multiple directories at a time")
+   print("        You don't have to specify a directory. the default is /")
+   print("        This will not change anything on the remote")
+   print("")
+   print("As an easter egg, you can read the source code to discover more operations which the author")
+   print("wanted for personal use, but was not sure if a wider audience would find confusing.")
    sys.exit(0)
 
 ##---------------------------------------------
-if len(sys.argv) < 4:
+if len(sys.argv) < 3:
     usage()
 
 operation = sys.argv[1]
-init_server(sys.argv[2])
-remote_root = sys.argv[3]
-if len(sys.argv) >= 5:
-    local_root = sys.argv[4]
+init_remote_routes(sys.argv[2])
 
-if operation == "sync" or operation == "update":
-    if len(sys.argv) != 5:
+if operation == "sync" or operation == "xsync" or operation == "update" or operation == "xupdate":
+    # "xsync" lets me specify a subdirectory on the remote instead of putting everything under "/".
+    # This is because I don't have one unified pile of stuff.
+    # I have several distinct trees i store in different places.
+    # When I manage my files, i like to create top level subdirectories for each tree.
+    # But I am not sure if anybody else would find that useful.
+    if operation.startswith("x"):
+        if len(sys.argv) < 5:
+            usage()
+        remote_root = sys.argv[3]
+        for local_root in sys.argv[4:]:
+            operation_sync(remote_root, local_root)
+    else:
+        if len(sys.argv) < 4:
+            usage()
+        for local_root in sys.argv[3:]:
+            operation_sync("/", local_root)
+
+elif operation == "cp" or operation == "xcp" or operation == "copy" or operation == "xcopy" or operation == "merge" or operation == "xmerge":
+    # Ditto with "xmerge" -- I use subdirectories to organize independent piles of stuff.
+    if operation.startswith("x"):
+        if len(sys.argv) < 5:
+            usage()
+        remote_root = sys.argv[3]
+        for local_root in sys.argv[4:]:
+            operation_merge(remote_root, local_root)
+    else:
+        if len(sys.argv) < 4:
+            usage()
+        for local_root in sys.argv[3:]:
+            operation_merge("/", local_root)
+
+elif operation == "rmdir" or operation == "wipe" or operation == "remove" or operation == "empty":
+    if len(sys.argv) < 4:
         usage()
-    operation_sync()
-elif operation == "cp" or operation == "copy" or operation == "merge":
-    if len(sys.argv) != 5:
-        usage()
-    operation_merge()
-elif operation == "rmdir" or operation == "wipe":
-    if len(sys.argv) != 4:
-        usage()
-    operation_remove()
+    remote_root = sys.argv[3]
+    operation_remove(remote_root)
+
 elif operation == "prune":
-    if len(sys.argv) != 4:
-        usage()
-    operation_prune()
+    if len(sys.argv) < 4:
+        operation_prune("/")
+    else:
+        for remote_root in sys.argv[3:]:
+            operation_prune(remote_root)
+
+elif operation == "list":
+    if len(sys.argv) < 4:
+        operation_list("/")
+    else:
+        for remote_root in sys.argv[3:]:
+            operation_list(remote_root)
+
 else:
     usage()
 
