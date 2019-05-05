@@ -57,8 +57,11 @@ def _create_remote_directory(destination_place):
     if __debug__:
         print("Creating directory %s" % (destination_place,))
     r = requests.post(create_endpoint, data={"path": destination_place})
-    print("Successfully created directory %s (%d / %s)" % (destination_place,
-                                                           r.status_code, r.content))
+    if r.ok:
+        print("Successfully created directory %s (%d / %s)" % (destination_place,
+                                                               r.status_code, r.content))
+    else:
+        return False
 
 
 def _check_for_remote_directory(destination_place):
@@ -71,10 +74,14 @@ def _check_for_remote_directory(destination_place):
     if __debug__:
         print("checking for existance of %s" % (destination_place,))
     r = requests.get(list_endpoint + "?path=%s" % (urllib.parse.quote(destination_place),))
-    if __debug__:
-        print("check complete: %d / %s" % (r.status_code, r.content,))
-    if r.status_code == 404:
-        _create_remote_directory(destination_place)
+    if r.ok:
+        if __debug__:
+            print("check complete: %d / %s" % (r.status_code, r.content,))
+    else:
+        if r.status_code == 404:
+            _create_remote_directory(destination_place)
+        else:
+            return False
 
 
 def check_for_remote_directory_recursively(destination_place):
@@ -119,29 +126,32 @@ def _upload_one_file(path, root):
         return
 
     r = requests.post(upload_endpoint, data=m, headers={'Content-Type': m.content_type})
-    if r.status_code >= 300:
+    if r.ok:
+        print("Successfully uploaded %s -> %s/%s" % (path, destination_place, path_basename))
+    else:
         print("FAILED upload %s -> %s/%s (%d / %s)" % (path, destination_place, path_basename,
                                                        r.status_code, r.content,))
-    else:
-        print("Successfully uploaded %s -> %s/%s" % (path, destination_place, path_basename))
+        return False
 
 
 def remove_remote_empty_directory(path):
     r = requests.post(delete_endpoint, data={"path": path})
-    if r.status_code > 300:
-        print("Failed to remove empty directory %s: %d %s" % (path, r.status_code, r.content))
-    else:
+    if r.ok:
         print("Removed empty directory %s" % (path,))
+    else:
+        print("Failed to remove empty directory %s: %d %s" % (path, r.status_code, r.content))
+        return False
 
 
 def remove_remote_file(path):
     if __debug__:
         print("Here i would delete the remote file %s" % (path,))
     r = requests.post(delete_endpoint, data={"path": path})
-    if r.status_code > 300:
-        print("Failed to remove remote file %s: %d %s" % (path, r.status_code, r.content))
-    else:
+    if r.ok:
         print("Removed remote file %s" % (path,))
+    else:
+        print("Failed to remove remote file %s: %d %s" % (path, r.status_code, r.content))
+        return False
 
 
 def _get_files_in_directory(directory):
@@ -154,14 +164,13 @@ def _get_files_in_directory(directory):
     if __debug__:
         print("get_files_in_directory: %s" % (url,))
     r = requests.get(url)
-
-    if r.status_code >= 300:
+    if r.ok:
+        return r.json()
+    else:
         print("ERROR: dirlist complete: %d / %s" % (r.status_code, r.content,))
         print("ERROR: Response status code: %d" % (r.status_code,))
         print("ERROR: Response json %s" % (r.text,))
         return None
-    else:
-        return r.json()
 
 
 def _traverse_directory_tree(directory):
