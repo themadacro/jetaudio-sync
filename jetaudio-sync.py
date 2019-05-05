@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3 -O
 # JetAudio Music Syncer
 # Copyright 2019 The Mad Acro -- Licensed under GPLv2 only.
 #
@@ -55,7 +55,7 @@ def init_remote_routes(ipaddr):
 #  You must have checked that the directory doesn't exist first.
 #  Only check_for_remote_directory() does that...
 #
-def create_remote_directory(destination_place):
+def _create_remote_directory(destination_place):
     if __debug__:
         print("Creating directory %s" % (destination_place,))
     r = requests.post(create_endpoint, data={"path": destination_place})
@@ -70,14 +70,14 @@ def create_remote_directory(destination_place):
 #   You must have checked that all the PARENT directories to this one exist first.
 #   Only check_for_remote_directory_recursively() does that...
 #
-def check_for_remote_directory(destination_place):
+def _check_for_remote_directory(destination_place):
     if __debug__:
         print("checking for existance of %s" % (destination_place,))
     r = requests.get(list_endpoint + "?path=%s" % (urllib.parse.quote(destination_place),))
     if __debug__:
         print("check complete: %d / %s" % (r.status_code, r.content,))
     if r.status_code == 404:
-        create_remote_directory(destination_place)
+        _create_remote_directory(destination_place)
 
 
 #
@@ -91,7 +91,7 @@ def check_for_remote_directory_recursively(destination_place):
     x = destination_place.split("/")
     for portion in x:
         accumulator = "%s/%s" % (accumulator, portion)
-        check_for_remote_directory(accumulator)
+        _check_for_remote_directory(accumulator)
 
 
 #
@@ -102,7 +102,7 @@ def check_for_remote_directory_recursively(destination_place):
 #    This will copy "dir1/dir2/file.mp3" local to "/myfiles/dir1/dir2/file.mp3" remote
 #    This function auto-creates any remote directories needed to hold the file.
 #
-def upload_one_file(path, root):
+def _upload_one_file(path, root):
     path_dirname = dirname(path)
     #print("path_dirname is %s" % (path_dirname,))
     path_basename = basename(path)
@@ -156,7 +156,7 @@ def remove_remote_file(path):
 #    Given one single directory, it returns the file items in that directory
 #    Some of them may be files, some may be directories.
 #
-def get_files_in_directory(directory):
+def _get_files_in_directory(directory):
     url = list_endpoint + "?path=%s" % (urllib.parse.quote(directory),)
     if __debug__:
         print("get_files_in_directory: %s" % (url,))
@@ -179,12 +179,12 @@ def get_files_in_directory(directory):
 #    This would be needed if you wanted to compare a "local" and "remote" list
 #    to see which files need to be pushed.
 #
-def traverse_directory_tree(directory):
+def _traverse_directory_tree(directory):
     if __debug__:
         print("traverse_directory_tree: %s" % (directory,))
     results = []
 
-    dirlist = get_files_in_directory(directory)
+    dirlist = _get_files_in_directory(directory)
     if dirlist is None:
         print("WARN: traverse_directory_tree: get_files_in_directory returned None")
         return []
@@ -195,7 +195,7 @@ def traverse_directory_tree(directory):
         if file["path"].endswith("/"):
             if __debug__:
                 print("%s is a directory -- we must go deeper" % (file["path"],))
-            subdirents = traverse_directory_tree(file["path"])
+            subdirents = _traverse_directory_tree(file["path"])
             for i in subdirents:
                 if __debug__:
                     print("Appending subdirent %s to my list" % (i["path"],))
@@ -214,11 +214,11 @@ def traverse_directory_tree(directory):
 #       retval[remote_filename] = remote_filesize
 #    where "remote_filename" is the full path on the remote.
 #
-def summarize_remote(remote_root):
+def _summarize_remote(remote_root):
     if __debug__:
         print("summarize_remote - %s" % (remote_root,))
     all_files = {}
-    files = traverse_directory_tree(remote_root)
+    files = _traverse_directory_tree(remote_root)
     for file in files:
         all_files[file["path"]] = file["size"]
     return all_files
@@ -230,10 +230,10 @@ def summarize_remote(remote_root):
 #    Returns all directories that could be safely deleted
 #    Because they are empty leafs (directories with neither files nor subdirs)
 #
-def find_empty_directories(directory):
+def _find_empty_directories(directory):
     results = []
 
-    dirlist = get_files_in_directory(directory)
+    dirlist = _get_files_in_directory(directory)
     if len(dirlist) == 0:
         if __debug__:
             print("%s is an empty directory" % (directory,))
@@ -243,7 +243,7 @@ def find_empty_directories(directory):
             if __debug__:
                 print("processing %s" % (file["path"],))
             if file["path"].endswith("/"):
-                subdirents = find_empty_directories(file["path"])
+                subdirents = _find_empty_directories(file["path"])
                 for i in subdirents:
                     if __debug__:
                         print("Appending subdirent %s to my list" % (i,))
@@ -293,13 +293,13 @@ def sync_local_to_remote(remote_root, remote_files, local_files):
                 print("OK  %s" % (remote_file,))
             remote_files[remote_file] = -1
         else:
-            upload_one_file(local_file, remote_root)
+            _upload_one_file(local_file, remote_root)
 
 
 ##-------------------------------------------
 def operation_sync(remote_root, local_root):
     remote_compound_root = "%s/%s" % (remote_root, local_root)
-    remote_files = summarize_remote(remote_compound_root)
+    remote_files = _summarize_remote(remote_compound_root)
     local_files = summarize_local(local_root)
 
     sync_local_to_remote(remote_root, remote_files, local_files)
@@ -311,14 +311,14 @@ def operation_sync(remote_root, local_root):
 
 def operation_merge(remote_root, local_root):
     remote_root = "%s/%s" % (remote_root, local_root)
-    remote_files = summarize_remote(remote_root)
+    remote_files = _summarize_remote(remote_root)
     local_files = summarize_local(local_root)
 
     sync_local_to_remote(remote_files, local_files)
 
 
 def operation_remove(remote_root):
-    remote_files = summarize_remote(remote_root)
+    remote_files = _summarize_remote(remote_root)
     for file in remote_files:
         if file.startswith(remote_root):
             remove_remote_file(file)
@@ -328,7 +328,7 @@ def operation_prune(remote_root):
     done_one = True
     while done_one:
         done_one = False
-        empty_directories = find_empty_directories(remote_root)
+        empty_directories = _find_empty_directories(remote_root)
         for empty_dir in empty_directories:
             if empty_dir.startswith(remote_root):
                 remove_remote_empty_directory(empty_dir)
@@ -336,7 +336,7 @@ def operation_prune(remote_root):
 
 
 def operation_list(remote_root):
-    remote_files = summarize_remote(remote_root)
+    remote_files = _summarize_remote(remote_root)
     for file in remote_files:
         print("%10d %s" % (remote_files[file], file))
 
