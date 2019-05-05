@@ -48,14 +48,12 @@ def init_remote_routes(ipaddr):
     delete_endpoint = "%s/delete" % (api_server,)
 
 
-##------------------------------------------
-#
-# create_remote_directory - create a specific directory.
-#  INTERNAL FUNCTION --
-#  You must have checked that the directory doesn't exist first.
-#  Only check_for_remote_directory() does that...
-#
 def _create_remote_directory(destination_place):
+    """Create a specific directory.
+
+    You must have checked that the directory doesn't exist first.
+    Only check_for_remote_directory() does that...
+    """
     if __debug__:
         print("Creating directory %s" % (destination_place,))
     r = requests.post(create_endpoint, data={"path": destination_place})
@@ -63,14 +61,13 @@ def _create_remote_directory(destination_place):
                                                            r.status_code, r.content))
 
 
-#
-# check_for_remote_directory - ensure a directory exists prior to using it
-#   INTERNAL FUNCTION --
-#   This function is similar to 'mkdir' -- that means it fails if parent dirs don't eixst.
-#   You must have checked that all the PARENT directories to this one exist first.
-#   Only check_for_remote_directory_recursively() does that...
-#
 def _check_for_remote_directory(destination_place):
+    """Ensure a directory exists prior to using it.
+
+    This function is similar to 'mkdir' -- that means it fails if parent dirs don't eixst.
+    You must have checked that all the PARENT directories to this one exist first.
+    Only check_for_remote_directory_recursively() does that...
+    """
     if __debug__:
         print("checking for existance of %s" % (destination_place,))
     r = requests.get(list_endpoint + "?path=%s" % (urllib.parse.quote(destination_place),))
@@ -80,13 +77,12 @@ def _check_for_remote_directory(destination_place):
         _create_remote_directory(destination_place)
 
 
-#
-# check_for_remote_directory_recursively - ensure a directory exists prior to using it.
-#    PUBLIC FUNCTION --
-#    This function is similar to 'mkdir -p' -- it will create a directory and any
-#    necessary parent subdirectories, so in the end 'destination_place' exists.
-#
 def check_for_remote_directory_recursively(destination_place):
+    """Ensure a directory exists prior to using it.
+
+    This function is similar to 'mkdir -p' -- it will create a directory and any
+    necessary parent subdirectories, so in the end 'destination_place' exists.
+    """
     accumulator = ""
     x = destination_place.split("/")
     for portion in x:
@@ -94,15 +90,14 @@ def check_for_remote_directory_recursively(destination_place):
         _check_for_remote_directory(accumulator)
 
 
-#
-# upload_one_file - upload one local file to a remote directory root
-#    INTERNAL FUNCTION --
-#    Now "path" may be in a subdirectory, like "dir1/dir2/file.mp3"
-#    And "root" should be the same for all files you're uploading (like "/myfiles")
-#    This will copy "dir1/dir2/file.mp3" local to "/myfiles/dir1/dir2/file.mp3" remote
-#    This function auto-creates any remote directories needed to hold the file.
-#
 def _upload_one_file(path, root):
+    """Upload one local file to a remote directory root.
+
+    Now "path" may be in a subdirectory, like "dir1/dir2/file.mp3"
+    And "root" should be the same for all files you're uploading (like "/myfiles")
+    This will copy "dir1/dir2/file.mp3" local to "/myfiles/dir1/dir2/file.mp3" remote
+    This function auto-creates any remote directories needed to hold the file.
+    """
     path_dirname = dirname(path)
     #print("path_dirname is %s" % (path_dirname,))
     path_basename = basename(path)
@@ -149,14 +144,12 @@ def remove_remote_file(path):
         print("Removed remote file %s" % (path,))
 
 
-##---------------------------------------------
-#
-# get_files_in_directory - collect all files in a remote directory
-#    INTERNAL FUNCTION --
-#    Given one single directory, it returns the file items in that directory
-#    Some of them may be files, some may be directories.
-#
 def _get_files_in_directory(directory):
+    """Collect all files in a remote directory.
+
+    Given one single directory, it returns the file items in that directory
+    Some of them may be files, some may be directories.
+    """
     url = list_endpoint + "?path=%s" % (urllib.parse.quote(directory),)
     if __debug__:
         print("get_files_in_directory: %s" % (url,))
@@ -171,15 +164,14 @@ def _get_files_in_directory(directory):
         return r.json()
 
 
-#
-# traverse_directory_tree - collect all files in a remote directory tree
-#    INTERNAL FUNCTION --
-#    Given a directory tree root, return all files relative to that root.
-#    Essentially, this enumerates all files under a directory tree.
-#    This would be needed if you wanted to compare a "local" and "remote" list
-#    to see which files need to be pushed.
-#
 def _traverse_directory_tree(directory):
+    """Collect all files in a remote directory tree.
+
+    Given a directory tree root, return all files relative to that root.
+    Essentially, this enumerates all files under a directory tree.
+    This would be needed if you wanted to compare a "local" and "remote" list
+    to see which files need to be pushed.
+    """
     if __debug__:
         print("traverse_directory_tree: %s" % (directory,))
     results = []
@@ -207,14 +199,13 @@ def _traverse_directory_tree(directory):
     return results
 
 
-#
-# summarize_remote - collect all files on the remote
-#    INTERNAL FUNCTION
-#    Returns all files on the remote as a hash,
-#       retval[remote_filename] = remote_filesize
-#    where "remote_filename" is the full path on the remote.
-#
 def _summarize_remote(remote_root):
+    """Collect all files on the remote.
+
+    Returns all files on the remote as a hash,
+       retval[remote_filename] = remote_filesize
+    where "remote_filename" is the full path on the remote.
+    """
     if __debug__:
         print("summarize_remote - %s" % (remote_root,))
     all_files = {}
@@ -224,13 +215,12 @@ def _summarize_remote(remote_root):
     return all_files
 
 
-#
-# find_empty_directories - collect all directories with neither files nor subdirs
-#    INTERNAL FUNCTION
-#    Returns all directories that could be safely deleted
-#    Because they are empty leafs (directories with neither files nor subdirs)
-#
 def _find_empty_directories(directory):
+    """Collect all directories with neither files nor subdir.
+
+    Returns all directories that could be safely deleted
+    Because they are empty leafs (directories with neither files nor subdirs)
+    """
     results = []
 
     dirlist = _get_files_in_directory(directory)
@@ -282,7 +272,6 @@ def summarize_local(root):
     return result
 
 
-##----------------------------------
 def sync_local_to_remote(remote_root, remote_files, local_files):
     for local_file in local_files:
         remote_file = "%s/%s" % (remote_root, local_file)
@@ -296,7 +285,6 @@ def sync_local_to_remote(remote_root, remote_files, local_files):
             _upload_one_file(local_file, remote_root)
 
 
-##-------------------------------------------
 def operation_sync(remote_root, local_root):
     remote_compound_root = "%s/%s" % (remote_root, local_root)
     remote_files = _summarize_remote(remote_compound_root)
@@ -341,7 +329,6 @@ def operation_list(remote_root):
         print("%10d %s" % (remote_files[file], file))
 
 
-##--------------------------------------------
 def usage():
     print("""
 Usage: {0} operation ip-address [remote-dir [local-dir [...]]]
@@ -393,7 +380,6 @@ wanted for personal use, but was not sure if a wider audience would find confusi
     sys.exit(1)
 
 
-##---------------------------------------------
 if len(sys.argv) < 3:
     usage()
 
